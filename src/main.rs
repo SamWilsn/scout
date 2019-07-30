@@ -171,6 +171,40 @@ impl<'a> ModuleImportResolver for RuntimeModuleImportResolver {
     }
 }
 
+struct LinkedModuleImportResolver {
+    instance: ModuleInstance,
+}
+
+impl LinkedModuleImportResolver {
+    fn new(instance: ModuleInstance) -> Self {
+        LinkedModuleImportResolver { instance: instance }
+    }
+}
+
+impl<'a> ModuleImportResolver for LinkedModuleImportResolver {
+    fn resolve_func(
+        &self,
+        field_name: &str,
+        _signature: &Signature,
+    ) -> Result<FuncRef, InterpreterError> {
+        if let Some(func_ref) = self.instance.export_by_name(field_name) {
+            if let Some(func_ref) = func_ref.as_func() {
+                Ok(func_ref.clone())
+            } else {
+                return Err(InterpreterError::Function(format!(
+                    "module export is not a function with name {}",
+                    field_name
+                )));
+            }
+        } else {
+            return Err(InterpreterError::Function(format!(
+                "module doesn't export function with name {}",
+                field_name
+            )));
+        }
+    }
+}
+
 const BYTES_PER_SHARD_BLOCK_BODY: usize = 16384;
 const ZERO_HASH: Bytes32 = Bytes32 { bytes: [0u8; 32] };
 
@@ -218,6 +252,28 @@ pub struct ShardState {
     // latest_state_roots: [bytes32, LATEST_STATE_ROOTS_LEMGTH]
 }
 
+/*
+pub fn load_importx(path: &str) -> LinkedModuleImportResolver {
+    let file = load_file(&path);
+    let module = Module::from_buffer(&file).expect("Moduel loading to succeed");
+    let imports = ImportsBuilder::new();
+    let instance = ModuleInstance::new(&module, &imports)
+        .expect("Module instantation expected to succeed")
+        .assert_no_start();
+    LinkedModuleImportResolver::new(instance)
+}
+*/
+
+pub fn load_import(path: &str) -> wasmi::ModuleRef {
+    let file = load_file(&path);
+    let module = Module::from_buffer(&file).expect("Moduel loading to succeed");
+    let imports = ImportsBuilder::new();
+    let instance = ModuleInstance::new(&module, &imports)
+        .expect("Module instantation expected to succeed")
+        .assert_no_start();
+    instance
+}
+
 pub fn execute_code(
     code: &[u8],
     pre_state: &Bytes32,
@@ -229,10 +285,27 @@ pub fn execute_code(
         block_data
     );
 
+/*
+/// # struct EnvModuleResolver;
+/// # impl ::wasmi::ModuleImportResolver for EnvModuleResolver { }
+/// # fn func() -> Result<(), ::wasmi::Error> {
+/// # let module = wasmi::Module::from_buffer(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]).unwrap();
+/// # let other_instance = ModuleInstance::new(&module, &ImportsBuilder::default())?.assert_no_start();
+///
+/// let imports = ImportsBuilder::new()
+///     .with_resolver("env", &EnvModuleResolver)
+///     // Note, that ModuleInstance can be a resolver too.
+///     .with_resolver("other_instance", &other_instance);
+/// let instance = ModuleInstance::new(&module, &imports)?.assert_no_start();
+*/
+
+
     let module = Module::from_buffer(&code).expect("Module loading to succeed");
     let mut imports = ImportsBuilder::new();
     // FIXME: use eth2
     imports.push_resolver("env", &RuntimeModuleImportResolver);
+    let bignum = load_import("bignum.wasm");
+    imports.push_resolver("hash", &bignum);
 
     let instance = ModuleInstance::new(&module, &imports)
         .expect("Module instantation expected to succeed")
