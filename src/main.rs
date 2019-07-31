@@ -1,7 +1,7 @@
 extern crate rustc_hex;
 extern crate wasmi;
 
-use rustc_hex::FromHex;
+use rustc_hex::{FromHex, ToHex};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs::File;
@@ -21,6 +21,7 @@ const BLOCKDATACOPY_FUNC_INDEX: usize = 2;
 const SAVEPOSTSTATEROOT_FUNC_INDEX: usize = 3;
 const PUSHNEWDEPOSIT_FUNC_INDEX: usize = 4;
 const USETICKS_FUNC_INDEX: usize = 5;
+const PRINT32_FUNC: usize = 6;
 
 struct Runtime<'a> {
     ticks_left: u32,
@@ -122,6 +123,11 @@ impl<'a> Externals for Runtime<'a> {
                 Ok(None)
             }
             PUSHNEWDEPOSIT_FUNC_INDEX => unimplemented!(),
+            PRINT32_FUNC => {
+               let val: u32 = args.nth(0);
+               println!("PRINT32: {}", val);
+               Ok(None)
+            }
             _ => panic!("unknown function index"),
         }
     }
@@ -159,6 +165,10 @@ impl<'a> ModuleImportResolver for RuntimeModuleImportResolver {
             "eth2_pushNewDeposit" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32][..], None),
                 PUSHNEWDEPOSIT_FUNC_INDEX,
+            ),
+            "print32" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32][..], None),
+                PRINT32_FUNC,
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(
@@ -309,7 +319,9 @@ pub fn execute_code(
 
     let instance = ModuleInstance::new(&module, &imports)
         .expect("Module instantation expected to succeed")
-        .assert_no_start();
+        .run_start(&mut NopExternals)
+         .expect("Failed to run start function in module");
+//        .assert_no_start();
 
     let internal_mem = instance
         .export_by_name("memory")
@@ -452,6 +464,7 @@ fn process_yaml_test(filename: &str) {
         process_shard_block(&mut shard_state, &beacon_state, Some(block.into()))
     }
     println!("{:#?}", shard_state);
+    println!("{:?}", shard_state.exec_env_states[0].bytes.to_hex());
     assert_eq!(shard_state, post_state);
 }
 
