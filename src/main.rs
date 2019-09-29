@@ -7,6 +7,7 @@ extern crate env_logger;
 use primitive_types::U256;
 use rustc_hex::{FromHex, ToHex};
 use serde::{Deserialize, Serialize};
+use std::convert::{TryFrom, TryInto};
 use std::env;
 use std::fmt;
 use std::fs::File;
@@ -483,32 +484,38 @@ struct TestFile {
     shard_post_state: TestShardState,
 }
 
-impl From<TestBeaconState> for BeaconState {
-    fn from(input: TestBeaconState) -> Self {
-        BeaconState {
+impl TryFrom<TestBeaconState> for BeaconState {
+    type Error = &'static str;
+
+    fn try_from(input: TestBeaconState) -> Result<Self, Self::Error> {
+        Ok(BeaconState {
             execution_scripts: input
                 .execution_scripts
                 .iter()
                 .map(|x| ExecutionScript { code: load_file(x) })
                 .collect(),
-        }
+        })
     }
 }
 
-impl From<TestShardBlock> for ShardBlock {
-    fn from(input: TestShardBlock) -> Self {
-        ShardBlock {
+impl TryFrom<TestShardBlock> for ShardBlock {
+    type Error = &'static str;
+
+    fn try_from(input: TestShardBlock) -> Result<Self, Self::Error> {
+        Ok(ShardBlock {
             env: input.env,
             data: ShardBlockBody {
                 data: input.data.from_hex().expect("invalid hex data"),
             },
-        }
+        })
     }
 }
 
-impl From<TestShardState> for ShardState {
-    fn from(input: TestShardState) -> Self {
-        ShardState {
+impl TryFrom<TestShardState> for ShardState {
+    type Error = &'static str;
+
+    fn try_from(input: TestShardState) -> Result<Self, Self::Error> {
+        Ok(ShardState {
             exec_env_states: input
                 .exec_env_states
                 .iter()
@@ -522,7 +529,7 @@ impl From<TestShardState> for ShardState {
                 .collect(),
             slot: 0,
             parent_block: ShardBlockHeader {},
-        }
+        })
     }
 }
 
@@ -533,13 +540,13 @@ fn process_yaml_test(filename: &str) {
         serde_yaml::from_slice::<TestFile>(&content[..]).expect("expected valid yaml");
     debug!("{:#?}", test_file);
 
-    let beacon_state: BeaconState = test_file.beacon_state.into();
-    let pre_state: ShardState = test_file.shard_pre_state.into();
-    let post_state: ShardState = test_file.shard_post_state.into();
+    let beacon_state: BeaconState = test_file.beacon_state.try_into().expect("");
+    let pre_state: ShardState = test_file.shard_pre_state.try_into().expect("");
+    let post_state: ShardState = test_file.shard_post_state.try_into().expect("");
 
     let mut shard_state = pre_state;
     for block in test_file.shard_blocks {
-        process_shard_block(&mut shard_state, &beacon_state, Some(block.into()))
+        process_shard_block(&mut shard_state, &beacon_state, Some(block.try_into().expect("")))
     }
     debug!("{}", shard_state);
     if shard_state != post_state {
