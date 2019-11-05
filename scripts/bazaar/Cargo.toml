@@ -14,6 +14,15 @@ ssz = "0.1.2"
 ssz-derive = "0.1.2"
 sha3 = "^0.6"
 
+[dependencies.tree_hash]
+path = "/home/sam/Code/lighthouse/eth2/utils/tree_hash"
+
+[dependencies.tree_hash_derive]
+path = "/home/sam/Code/lighthouse/eth2/utils/tree_hash_derive"
+
+[patch.crates-io]
+eth2_hashing = { path = "/home/sam/Code/lighthouse/eth2/utils/eth2_hashing" }
+
 [lib]
 crate-type = ["cdylib"]
 

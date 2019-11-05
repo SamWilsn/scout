@@ -16,3 +16,6 @@ serde_yaml = "0.8"
 log = "0.4"
 env_logger = "0.7"
 primitive-types = "0.6"
+
+[profile.release]
+debug = true

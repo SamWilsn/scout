@@ -27,21 +27,26 @@
 extern crate ewasm_api;
 extern crate sha3;
 extern crate ssz;
+extern crate tree_hash;
 
 #[macro_use]
 extern crate ssz_derive;
 
+#[macro_use]
+extern crate tree_hash_derive;
+
 use ewasm_api::*;
 use sha3::{Digest, Keccak256};
 use ssz::{Decode, Encode};
+use tree_hash::TreeHash;
 
-#[derive(Debug, PartialEq, Ssz, Default)]
+#[derive(Debug, PartialEq, Ssz, Default, TreeHash)]
 struct Message {
     pub timestamp: u64,
     pub message: [u8; 32],
 }
 
-#[derive(Debug, PartialEq, Ssz, Default)]
+#[derive(Debug, PartialEq, Ssz, Default, TreeHash)]
 struct State {
     pub messages: Vec<Message>,
 }
@@ -52,25 +57,11 @@ struct InputBlock {
     pub state: State,
 }
 
-trait StateRoot {
-    fn state_root(&self) -> types::Bytes32;
-}
-
-impl StateRoot for State {
-    fn state_root(&self) -> types::Bytes32 {
-        let serialised = self.encode();
-        let hash = Keccak256::digest(&serialised[..]);
-        let mut ret = types::Bytes32::default();
-        ret.bytes.copy_from_slice(&hash[..]);
-        ret
-    }
-}
-
 fn process_block(pre_state_root: types::Bytes32, mut block_data: &[u8]) -> types::Bytes32 {
     let mut block = InputBlock::decode(&mut block_data).expect("valid input");
 
     // Validate pre state
-    assert!(block.state.state_root() == pre_state_root);
+    assert!(block.state.tree_hash_root() == pre_state_root.bytes);
 
     for message in block.new_messages {
         block.state.messages.push(message)
@@ -79,7 +70,12 @@ fn process_block(pre_state_root: types::Bytes32, mut block_data: &[u8]) -> types
     #[cfg(test)]
     println!("{:#?}", block.state);
 
-    block.state.state_root()
+    let hash_root_vec = block.state.tree_hash_root();
+
+    let mut hash_root = types::Bytes32::default();
+    hash_root.bytes.copy_from_slice(&hash_root_vec[..32]);
+
+    hash_root
 }
 
 #[cfg(not(test))]
